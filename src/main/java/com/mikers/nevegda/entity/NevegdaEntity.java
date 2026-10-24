@@ -1,9 +1,14 @@
 package com.mikers.nevegda.entity;
 
+import com.geckolib.animatable.GeoEntity;
+import com.geckolib.animatable.instance.AnimatableInstanceCache;
+import com.geckolib.animatable.manager.AnimatableManager;
+import com.geckolib.animation.AnimationController;
+import com.geckolib.animation.RawAnimation;
+import com.geckolib.util.GeckoLibUtil;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
@@ -16,12 +21,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import com.geckolib.animatable.GeoEntity;
-import com.geckolib.animatable.instance.AnimatableInstanceCache;
-import com.geckolib.animatable.manager.AnimatableManager;
-import com.geckolib.animation.AnimationController;
-import com.geckolib.animation.RawAnimation;
-import com.geckolib.util.GeckoLibUtil;
 
 public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     private static final EntityDataAccessor<Integer> VARIANT =
@@ -29,9 +28,14 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
+    // --- Поля для управления анимациями ---
+    private int currentAttackVariant = 0;
+    private int currentHurtVariant = 0;
+    private int lastHurtTime = 0;
+
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
-        this.setVariant(this.random.nextInt(5) + 1); // 5 случайных текстур
+        this.setVariant(this.random.nextInt(5) + 1);
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -71,31 +75,63 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         this.goalSelector.addGoal(3, new LookAtPlayerGoal(this, Player.class, 8.0F));
 
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
-        
-        // ИСПРАВЛЕНО: Лямбда принимает (entity, level), как требует Selector
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(
-                this, LivingEntity.class, 10, true, false, 
+                this, LivingEntity.class, 10, true, false,
                 (entity, level) -> !(entity instanceof NevegdaEntity)
         ));
     }
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        // --- Контроллер 1: Основные действия (Движение + Атака) ---
         controllers.add(new AnimationController<>("main", 5, state -> {
-            // Если атакует (взмах)
+            // 1. Атака
             if (this.swinging) {
-                return state.setAndContinue(RawAnimation.begin().thenPlay("attack"));
+                if (currentAttackVariant == 0) {
+                    currentAttackVariant = this.random.nextInt(3) + 1;
+                }
+                return state.setAndContinue(RawAnimation.begin().thenPlay("attack" + currentAttackVariant));
+            } else {
+                currentAttackVariant = 0;
             }
-            // Если движется
+
+            // 2. Движение
             if (this.isMoving()) {
                 if (this.isMovingFast()) {
                     return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
                 }
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
-            // В покое
+
+            // 3. Покой
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
+
+        // --- Контроллер 2: Реакция на урон (Hurt) ---
+        controllers.add(new AnimationController<>("action", 0, state -> {
+            if (this.hurtTime > 0 && this.hurtTime > lastHurtTime) {
+                if (currentHurtVariant == 0) {
+                    currentHurtVariant = this.random.nextInt(3) + 1;
+                }
+                return state.setAndContinue(RawAnimation.begin().thenPlay("hurt" + currentHurtVariant));
+            }
+
+            if (this.hurtTime == 0) {
+                currentHurtVariant = 0;
+            }
+
+            return state.setAndContinue(RawAnimation.begin());
+        }));
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (this.hurtTime > 0) {
+            lastHurtTime = this.hurtTime;
+        } else {
+            lastHurtTime = 0;
+        }
     }
 
     private boolean isMoving() {
