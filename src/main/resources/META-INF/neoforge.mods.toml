@@ -3,7 +3,9 @@ license="${mod_license}"
 modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
+bannerFile="mikers_nevegda_icon.png"
 logoFile="mikers_nevegda_icon.png"
+iconFile="mikers_nevegda_icon.png"
 description='''
 Adds Nevegda.
 '''
