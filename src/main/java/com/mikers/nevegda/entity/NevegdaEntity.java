@@ -4,6 +4,7 @@ import com.geckolib.animatable.GeoEntity;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
+import com.geckolib.animation.PlayState;
 import com.geckolib.animation.RawAnimation;
 import com.geckolib.util.GeckoLibUtil;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -28,8 +29,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    // --- Поля для управления анимациями ---
-    private int currentAttackVariant = 0;
     private int currentHurtVariant = 0;
     private int lastHurtTime = 0;
 
@@ -83,31 +82,18 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // --- Контроллер 1: Основные действия (Движение + Атака) ---
+        // --- Контроллер 1: Движение и покой ---
         controllers.add(new AnimationController<>("main", 5, state -> {
-            // 1. Атака
-            if (this.swinging) {
-                if (currentAttackVariant == 0) {
-                    currentAttackVariant = this.random.nextInt(3) + 1;
-                }
-                return state.setAndContinue(RawAnimation.begin().thenPlay("attack" + currentAttackVariant));
-            } else {
-                currentAttackVariant = 0;
-            }
-
-            // 2. Движение
             if (this.isMoving()) {
                 if (this.isMovingFast()) {
                     return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
                 }
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
-
-            // 3. Покой
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
 
-        // --- Контроллер 2: Реакция на урон (Hurt) ---
+        // --- Контроллер 2: Урон (hurt1-3) ---
         controllers.add(new AnimationController<>("action", 0, state -> {
             if (this.hurtTime > 0 && this.hurtTime > lastHurtTime) {
                 if (currentHurtVariant == 0) {
@@ -115,12 +101,25 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
                 }
                 return state.setAndContinue(RawAnimation.begin().thenPlay("hurt" + currentHurtVariant));
             }
-
             if (this.hurtTime == 0) {
                 currentHurtVariant = 0;
             }
+            return PlayState.STOP;
+        }));
 
-            return state.setAndContinue(RawAnimation.begin());
+        // --- Контроллер 3: Атака (attack1-3) через triggerableAnim ---
+        controllers.add(new AnimationController<>("attack", 0, state -> {
+            // Если swinging true — запускаем случайную атаку через trigger
+            if (this.swinging) {
+                // triggerableAnim запускает анимацию один раз и не блокирует контроллер
+                if (!state.isCurrentAnimation(RawAnimation.begin().thenPlay("attack1")) &&
+                    !state.isCurrentAnimation(RawAnimation.begin().thenPlay("attack2")) &&
+                    !state.isCurrentAnimation(RawAnimation.begin().thenPlay("attack3"))) {
+                    int variant = this.random.nextInt(3) + 1;
+                    state.setAnimation(RawAnimation.begin().thenPlay("attack" + variant));
+                }
+            }
+            return PlayState.CONTINUE;
         }));
     }
 
