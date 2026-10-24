@@ -80,6 +80,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         ));
     }
 
+    // --- АТАКА ---
     @Override
     public boolean doHurtTarget(ServerLevel level, Entity target) {
         if (!this.level().isClientSide()) {
@@ -88,12 +89,14 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         return super.doHurtTarget(level, target);
     }
 
+    // --- УРОН (вместо переопределения hurt) ---
+    // Переопределяем метод, который вызывается при получении урона и не является final.
     @Override
-    public void hurt(DamageSource source, float amount) {
+    public boolean hurtServer(ServerLevel level, DamageSource source, float amount) {
         if (!this.level().isClientSide() && this.hurtTime == 0) {
             this.triggerAnim("actions", "hurt");
         }
-        super.hurt(source, amount);
+        return super.hurtServer(level, source, amount);
     }
 
     @Override
@@ -111,9 +114,9 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         }));
 
         // --- КОНТРОЛЛЕР 2: ДЕЙСТВИЯ (HURT, SWIPE) ---
-        // Используем готовый triggerOnlyController из DefaultAnimations.
-        // Он сам внутри возвращает PlayState.STOP и не мешает движению.
-        controllers.add(DefaultAnimations.triggerOnlyController("actions")
+        // Исправлено: triggerOnlyController() не принимает аргументов.
+        // Имя "actions" задаётся внутри этого метода автоматически.
+        controllers.add(DefaultAnimations.triggerOnlyController()
                 .triggerableAnim("swipe", RawAnimation.begin().thenPlay("swipe"))
                 .triggerableAnim("hurt", RawAnimation.begin().thenPlay("hurt")));
     }
