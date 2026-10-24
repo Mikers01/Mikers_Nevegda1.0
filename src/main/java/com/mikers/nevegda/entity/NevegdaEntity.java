@@ -80,19 +80,19 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         ));
     }
 
+    // --- АТАКА (не трогаем, работает) ---
     @Override
     public boolean doHurtTarget(ServerLevel level, Entity target) {
         if (!this.level().isClientSide()) {
-            // ВАЖНО: имя контроллера теперь "Actions" (с большой буквы)
             this.triggerAnim("Actions", "swipe");
         }
         return super.doHurtTarget(level, target);
     }
 
+    // --- УРОН (не трогаем, работает) ---
     @Override
     public boolean hurtServer(ServerLevel level, DamageSource source, float amount) {
         if (!this.level().isClientSide() && this.hurtTime == 0) {
-            // ВАЖНО: имя контроллера теперь "Actions"
             this.triggerAnim("Actions", "hurt");
         }
         return super.hurtServer(level, source, amount);
@@ -100,12 +100,11 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // --- КОНТРОЛЛЕР 1: ДВИЖЕНИЕ ---
+        // --- КОНТРОЛЛЕР 1: ДВИЖЕНИЕ (ИСПРАВЛЕНО) ---
         controllers.add(new AnimationController<>("movement", 3, state -> {
-            LivingEntity target = this.getTarget();
-            // Проверяем, что цель есть и она жива
-            if (target != null && target.isAlive()) {
-                // Если sprinting всё ещё не работает, проверь JSON: у анимации должен быть "loop": true
+            // ИСПРАВЛЕНО: проверяем isAggressive() — это надёжнее, чем getTarget()
+            // isAggressive() остаётся true, даже если цель на мгновение пропала
+            if (this.isAggressive()) {
                 return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
             }
             if (this.isMoving()) {
@@ -114,8 +113,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
 
-        // --- КОНТРОЛЛЕР 2: ДЕЙСТВИЯ ---
-        // triggerOnlyController() создаёт контроллер с именем "Actions"
+        // --- КОНТРОЛЛЕР 2: ДЕЙСТВИЯ (НЕ ТРОГАЕМ, РАБОТАЕТ) ---
         controllers.add(DefaultAnimations.triggerOnlyController()
                 .triggerableAnim("swipe", RawAnimation.begin().thenPlay("swipe"))
                 .triggerableAnim("hurt", RawAnimation.begin().thenPlay("hurt")));
