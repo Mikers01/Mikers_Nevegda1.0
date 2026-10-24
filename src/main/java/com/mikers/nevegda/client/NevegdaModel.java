@@ -6,6 +6,7 @@ import com.geckolib.model.GeoModel;
 import com.geckolib.renderer.base.GeoRenderState;
 
 public class NevegdaModel extends GeoModel<NevegdaEntity> {
+
     @Override
     public Identifier getModelResource(GeoRenderState renderState) {
         return Identifier.fromNamespaceAndPath("mikers_nevegda", "mikers_nevegda");
@@ -18,7 +19,13 @@ public class NevegdaModel extends GeoModel<NevegdaEntity> {
 
     @Override
     public Identifier getTextureResource(GeoRenderState renderState) {
-        // Оставляем дефолт, рендерер всё равно переопределит
-        return Identifier.fromNamespaceAndPath("mikers_nevegda", "textures/entity/MikersNevegda1.png");
+        // Получаем ID сущности из RenderState (он всегда есть у сущностей)
+        int id = renderState.getEntityId();
+        
+        // Делим ID на 5 с остатком, чтобы получить число от 0 до 4, и прибавляем 1
+        // Это дает стабильный выбор текстуры для каждой конкретной сущности
+        int variant = (id % 5) + 1; 
+        
+        return Identifier.fromNamespaceAndPath("mikers_nevegda", "textures/entity/MikersNevegda" + variant + ".png");
     }
 }
