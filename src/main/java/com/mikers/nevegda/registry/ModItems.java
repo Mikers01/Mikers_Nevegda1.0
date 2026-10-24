@@ -9,8 +9,8 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public class ModItems {
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MikersNevegdaMod.MOD_ID);
 
-    // Регистрируем яйцо призыва.
-    // Цвета (0x1a1a1a - темный, 0x8b0000 - темно-красный) можешь поменять под свою текстуру.
+    // Регистрируем яйцо. Цвета (0x1a1a1a, 0x8b0000) можно поставить любые, 
+    // так как текстура у тебя уже своя.
     public static final DeferredItem<Item> NEVEGDA_SPAWN_EGG = ITEMS.register("nevegda_spawn_egg",
             () -> new SpawnEggItem(ModEntities.NEVEGDA.get(), 0x1a1a1a, 0x8b0000, new Item.Properties()));
 }
