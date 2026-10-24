@@ -37,7 +37,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 500.0D)      // HP Вардена
-                .add(Attributes.MOVEMENT_SPEED, 0.5F)    // Скорость игрока
+                .add(Attributes.MOVEMENT_SPEED, 0.35F)    // Скорость игрока
                 .add(Attributes.ATTACK_DAMAGE, 1.0D)     // Урон кулаком
                 .add(Attributes.FOLLOW_RANGE, 32.0D);
     }
