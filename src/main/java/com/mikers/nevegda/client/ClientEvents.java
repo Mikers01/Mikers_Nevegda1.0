@@ -9,8 +9,10 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 
 @EventBusSubscriber(modid = MikersNevegdaMod.MOD_ID, value = Dist.CLIENT)
 public class ClientEvents {
+
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        // Вот эта строчка обязательна — она связывает сущность и её рендерер
         event.registerEntityRenderer(ModEntities.NEVEGDA.get(), NevegdaRenderer::new);
     }
 }
