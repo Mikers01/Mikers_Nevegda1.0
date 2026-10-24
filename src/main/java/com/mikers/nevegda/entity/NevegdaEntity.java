@@ -25,6 +25,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.AABB;
+
+import java.util.List;
 
 public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     private static final EntityDataAccessor<Integer> VARIANT =
@@ -35,7 +38,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
         this.setVariant(this.random.nextInt(5) + 1);
-        // БЕССМЕРТИЕ: Моб не будет деспавниться (как с биркой)
         this.setPersistenceRequired();
     }
 
@@ -44,7 +46,9 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
                 .add(Attributes.MAX_HEALTH, 500.0D)
                 .add(Attributes.MOVEMENT_SPEED, 0.3F)
                 .add(Attributes.ATTACK_DAMAGE, 1.0D)
-                .add(Attributes.FOLLOW_RANGE, 32.0D);
+                .add(Attributes.FOLLOW_RANGE, 32.0D)
+                // ИММУНИТЕТ К ОТБРАСЫВАНИЮ: 1.0 = 100% сопротивление
+                .add(Attributes.KNOCKBACK_RESISTANCE, 1.0D); 
     }
 
     @Override
@@ -71,9 +75,11 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
-        this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.0D, false));
-        this.goalSelector.addGoal(2, new WaterAvoidingRandomStrollGoal(this, 1.0D));
-        this.goalSelector.addGoal(3, new LookAtPlayerGoal(this, Player.class, 8.0F));
+        // Добавляем цель "Держаться вместе" (приоритет ниже, чем у атаки, но выше чем у брождения)
+        this.goalSelector.addGoal(2, new FollowGroupGoal(this, 1.0D));
+        this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.0D, false));
+        this.goalSelector.addGoal(4, new WaterAvoidingRandomStrollGoal(this, 1.0D));
+        this.goalSelector.addGoal(5, new LookAtPlayerGoal(this, Player.class, 8.0F));
 
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(
@@ -90,11 +96,27 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         return super.doHurtTarget(level, target);
     }
 
+    // --- СТАЙНЫЙ ИНСТИНКТ И УРОН ---
     @Override
     public boolean hurtServer(ServerLevel level, DamageSource source, float amount) {
         if (!this.level().isClientSide() && this.hurtTime == 0) {
             this.triggerAnim("Actions", "hurt");
         }
+
+        // СТАЙНЫЙ ИНСТИНКТ: Если атаковал игрок или другое существо, зовем на помощь
+        Entity attacker = source.getEntity();
+        if (attacker instanceof LivingEntity livingAttacker && !this.level().isClientSide()) {
+            // Ищем всех Невежд в радиусе 30 блоков
+            AABB area = this.getBoundingBox().inflate(30.0D);
+            List<NevegdaEntity> allies = this.level().getEntitiesOfClass(NevegdaEntity.class, area);
+            for (NevegdaEntity ally : allies) {
+                // Если у союзника нет цели или он атакует кого-то другого — переключаем на обидчика
+                if (ally.getTarget() == null || ally.getTarget() != livingAttacker) {
+                    ally.setTarget(livingAttacker);
+                }
+            }
+        }
+
         return super.hurtServer(level, source, amount);
     }
 
@@ -119,13 +141,70 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.00001D;
     }
 
-    // БЕССМЕРТИЕ: Запрещаем естественный деспавн (когда игрок далеко)
+    // --- КАСТОМНАЯ ЦЕЛЬ: ДЕРЖАТЬСЯ ВМЕСТЕ ---
+    public static class FollowGroupGoal extends Goal {
+        private final NevegdaEntity mob;
+        private final double speedModifier;
+        private NevegdaEntity leader;
+
+        public FollowGroupGoal(NevegdaEntity mob, double speedModifier) {
+            this.mob = mob;
+            this.speedModifier = speedModifier;
+        }
+
+        @Override
+        public boolean canUse() {
+            // Не работаем, если у моба уже есть цель для атаки
+            if (this.mob.getTarget() != null) return false;
+
+            // Ищем ближайшего сородича в радиусе 10 блоков
+            List<NevegdaEntity> allies = this.mob.level().getEntitiesOfClass(
+                    NevegdaEntity.class,
+                    this.mob.getBoundingBox().inflate(10.0D),
+                    (entity) -> entity != this.mob && entity.isAlive()
+            );
+
+            if (allies.isEmpty()) return false;
+
+            // Выбираем первого (или ближайшего)
+            this.leader = allies.get(0);
+            // Начинаем следовать, только если мы находимся дальше 3 блоков от лидера
+            return this.mob.distanceToSqr(this.leader) > 9.0D;
+        }
+
+        @Override
+        public void start() {
+            // Запускаем навигацию к лидеру
+        }
+
+        @Override
+        public void tick() {
+            if (this.leader != null && this.leader.isAlive()) {
+                // Постоянно обновляем путь к лидеру
+                this.mob.getNavigation().moveTo(this.leader, this.speedModifier);
+            }
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            // Продолжаем, пока есть лидер, он жив, и мы не начали атаку
+            return this.leader != null && this.leader.isAlive() 
+                    && this.mob.getTarget() == null 
+                    && this.mob.distanceToSqr(this.leader) > 4.0D;
+        }
+
+        @Override
+        public void stop() {
+            this.leader = null;
+            this.mob.getNavigation().stop();
+        }
+    }
+
     @Override
     public boolean removeWhenFarAway(double distanceToClosestPlayer) {
         return false;
     }
 
-    // БЕССМЕРТИЕ: Исключаем из лимита враждебных мобов (mob cap)
     @Override
     public boolean isPersistenceRequired() {
         return true;
