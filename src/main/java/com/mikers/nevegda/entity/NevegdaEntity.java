@@ -30,6 +30,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private int currentHurtVariant = 0;
     private int lastHurtTime = 0;
+    // Флаг, чтобы анимация атаки запускалась ровно один раз за удар
+    private boolean attackTriggered = false;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -81,7 +83,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // Контроллер 1: движение и покой (низкий приоритет)
+        // Контроллер 1: движение и покой
         controllers.add(new AnimationController<>("main", 5, state -> {
             if (this.isMoving()) {
                 if (this.isMovingFast()) {
@@ -92,7 +94,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
 
-        // Контроллер 2: получение урона (высокий приоритет, прерывает движение/покой)
+        // Контроллер 2: получение урона (hurt1-3)
         controllers.add(new AnimationController<>("action", 0, state -> {
             if (this.hurtTime > 0 && this.hurtTime > lastHurtTime) {
                 if (currentHurtVariant == 0) {
@@ -103,10 +105,10 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             if (this.hurtTime == 0) {
                 currentHurtVariant = 0;
             }
-            return state.setAndContinue(RawAnimation.begin()); // пустая анимация, не влияет
+            return state.setAndContinue(RawAnimation.begin());
         }));
 
-        // Контроллер 3: анимация атаки (запускается по триггеру, не мешает другим контроллерам)
+        // Контроллер 3: атака (attack1-3) через триггерные анимации
         controllers.add(new AnimationController<>("attack", 0, state -> state.setAndContinue(RawAnimation.begin()))
                 .triggerableAnim("attack1", RawAnimation.begin().thenPlay("attack1"))
                 .triggerableAnim("attack2", RawAnimation.begin().thenPlay("attack2"))
@@ -124,10 +126,17 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             lastHurtTime = 0;
         }
 
-        // Запускаем анимацию атаки при взмахе рукой (только на сервере, чтобы избежать дублирования на клиенте)
-        if (!this.level().isClientSide() && this.swinging && this.swingingTime == 1) {
-            int variant = this.random.nextInt(3) + 1;
-            this.triggerAnim("attack", "attack" + variant);
+        // Запускаем анимацию атаки в момент взмаха (swingTime == 1 — первый тик взмаха)
+        // Только на сервере, чтобы не дублировать на клиенте
+        if (!this.level().isClientSide() && this.swinging) {
+            if (!attackTriggered) {
+                int variant = this.random.nextInt(3) + 1;
+                this.triggerAnim("attack", "attack" + variant);
+                attackTriggered = true;
+            }
+        } else {
+            // Сброс флага, когда взмах закончился
+            attackTriggered = false;
         }
     }
 
