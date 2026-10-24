@@ -80,12 +80,12 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         ));
     }
 
-    // ПЕРЕОПРЕДЕЛЯЕМ МЕТОД АТАКИ
+    // ПЕРЕОПРЕДЕЛЯЕМ МЕТОД АТАКИ (с учетом NeoForge 26.2)
     @Override
-    public boolean doHurtTarget(Entity target) {
+    public boolean doHurtTarget(net.minecraft.server.level.ServerLevel level, Entity target) {
         // Включаем флаг атаки. В контроллере он переключит анимацию на swipe.
         this.isAttacking = true;
-        return super.doHurtTarget(target);
+        return super.doHurtTarget(level, target);
     }
 
     @Override
