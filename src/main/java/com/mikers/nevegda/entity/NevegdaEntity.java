@@ -3,6 +3,7 @@ package com.mikers.nevegda.entity;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
@@ -30,12 +31,13 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
+        this.setVariant(this.random.nextInt(5) + 1); // 5 случайных текстур
     }
 
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 500.0D)
-                .add(Attributes.MOVEMENT_SPEED, 0.1F)
+                .add(Attributes.MOVEMENT_SPEED, 0.3F)
                 .add(Attributes.ATTACK_DAMAGE, 1.0D)
                 .add(Attributes.FOLLOW_RANGE, 32.0D);
     }
@@ -43,21 +45,11 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
-        builder.define(VARIANT, 0); // По умолчанию 0, установим при спавне
+        builder.define(VARIANT, 1);
     }
 
-    public int getVariant() { 
-        // Если вариант еще не установлен (0), устанавливаем его на основе ID сущности
-        if (this.entityData.get(VARIANT) == 0) {
-            int variant = (this.getId() % 5) + 1; // Равномерное распределение от 1 до 5
-            this.entityData.set(VARIANT, variant);
-        }
-        return this.entityData.get(VARIANT); 
-    }
-    
-    public void setVariant(int variant) { 
-        this.entityData.set(VARIANT, variant); 
-    }
+    public int getVariant() { return this.entityData.get(VARIANT); }
+    public void setVariant(int variant) { this.entityData.set(VARIANT, variant); }
 
     @Override
     public void addAdditionalSaveData(ValueOutput output) {
@@ -80,6 +72,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
         
+        // ИСПРАВЛЕНО: Лямбда принимает (entity, level), как требует Selector
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(
                 this, LivingEntity.class, 10, true, false, 
                 (entity, level) -> !(entity instanceof NevegdaEntity)
@@ -89,11 +82,18 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>("main", 5, state -> {
-            if (this.swinging) return state.setAndContinue(RawAnimation.begin().thenPlay("attack"));
+            // Если атакует (взмах)
+            if (this.swinging) {
+                return state.setAndContinue(RawAnimation.begin().thenPlay("attack"));
+            }
+            // Если движется
             if (this.isMoving()) {
-                if (this.isMovingFast()) return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
+                if (this.isMovingFast()) {
+                    return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
+                }
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
+            // В покое
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
     }
