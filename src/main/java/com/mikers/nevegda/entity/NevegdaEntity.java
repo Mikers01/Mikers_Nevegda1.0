@@ -30,7 +30,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     // Флаги для управления анимациями
     private boolean isSwinging = false;
-    private int hurtTimeTracker = 0;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -82,7 +81,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // Один контроллер, transitionTicks = 2 для плавности, но не для "съедания" анимаций
         controllers.add(new AnimationController<>("main", 2, state -> {
             // 1. HURT (если недавно получили урон)
             if (this.hurtTime > 0) {
@@ -114,7 +112,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         super.tick();
 
         // Логика для SWIPE: если моб начал махать рукой, включаем флаг
-        if (!this.level().isClientSide && this.swinging) {
+        // ИСПРАВЛЕНО: isClientSide() с методом, а не полем
+        if (!this.level().isClientSide() && this.swinging) {
             this.isSwinging = true;
         } else {
             this.isSwinging = false;
