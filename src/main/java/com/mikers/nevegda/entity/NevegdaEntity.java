@@ -28,6 +28,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
+    // --- Поля для управления анимациями ---
     private int currentHurtVariant = 0;
     private int lastHurtTime = 0;
     private boolean attackTriggered = false;
@@ -83,20 +84,9 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // Контроллер 1: движение и покой
-        controllers.add(new AnimationController<>("main", 5, state -> {
-            if (this.isMoving()) {
-                LivingEntity target = this.getTarget();
-                if (target != null && target.isAlive()) {
-                    return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
-                }
-                return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
-            }
-            return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
-        }));
-
-        // Контроллер 2: получение урона (hurt1-3)
-        controllers.add(new AnimationController<>("action", 0, state -> {
+        // ОДИН контроллер для всего: hurt -> attack -> движение -> idle
+        controllers.add(new AnimationController<>("main", 3, state -> {
+            // 1. УРОН (наивысший приоритет)
             if (this.hurtTime > 0 && this.hurtTime > lastHurtTime) {
                 if (currentHurtVariant == 0) {
                     currentHurtVariant = this.random.nextInt(3) + 1;
@@ -106,15 +96,23 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             if (this.hurtTime == 0) {
                 currentHurtVariant = 0;
             }
-            return state.setAndContinue(RawAnimation.begin());
-        }));
 
-        // Контроллер 3: атака (attack1-3) — обычный контроллер, без триггеров
-        controllers.add(new AnimationController<>("attack", 0, state -> {
+            // 2. АТАКА
             if (this.attackTriggered) {
                 return state.setAndContinue(RawAnimation.begin().thenPlay("attack" + this.currentAttackVariant));
             }
-            return state.setAndContinue(RawAnimation.begin());
+
+            // 3. ДВИЖЕНИЕ
+            if (this.isMoving()) {
+                LivingEntity target = this.getTarget();
+                if (target != null && target.isAlive()) {
+                    return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
+                }
+                return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
+            }
+
+            // 4. ПОКОЙ
+            return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
     }
 
@@ -122,6 +120,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public void tick() {
         super.tick();
 
+        // Отслеживаем момент получения урона
         if (this.hurtTime > 0) {
             lastHurtTime = this.hurtTime;
         } else {
