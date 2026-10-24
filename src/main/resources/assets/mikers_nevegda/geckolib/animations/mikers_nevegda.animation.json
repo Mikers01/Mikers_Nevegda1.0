@@ -464,7 +464,6 @@
 			}
 		},
 		"hurt": {
-			"loop": "hold_on_last_frame",
 			"animation_length": 0.2917,
 			"bones": {
 				"body": {
