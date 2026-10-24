@@ -4,13 +4,14 @@ import com.geckolib.animatable.GeoEntity;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
-import com.geckolib.animation.PlayState;
 import com.geckolib.animation.RawAnimation;
+import com.geckolib.constant.DefaultAnimations;
 import com.geckolib.util.GeckoLibUtil;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -30,10 +31,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             SynchedEntityData.defineId(NevegdaEntity.class, EntityDataSerializers.INT);
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
-
-    // Флаги для управления анимациями
-    private boolean isAttacking = false;
-    private int attackTimer = 0;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -83,61 +80,46 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         ));
     }
 
-    // Переопределяем метод атаки для NeoForge 26.2
     @Override
     public boolean doHurtTarget(ServerLevel level, Entity target) {
-        this.isAttacking = true;
-        this.attackTimer = 10; // 0.5 секунды (10 тиков)
+        if (!this.level().isClientSide()) {
+            this.triggerAnim("actions", "swipe");
+        }
         return super.doHurtTarget(level, target);
+    }
+
+    @Override
+    public void hurt(DamageSource source, float amount) {
+        if (!this.level().isClientSide() && this.hurtTime == 0) {
+            this.triggerAnim("actions", "hurt");
+        }
+        super.hurt(source, amount);
     }
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         // --- КОНТРОЛЛЕР 1: ДВИЖЕНИЕ ---
         controllers.add(new AnimationController<>("movement", 3, state -> {
+            LivingEntity target = this.getTarget();
+            if (target != null && target.isAlive()) {
+                return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
+            }
             if (this.isMoving()) {
-                LivingEntity target = this.getTarget();
-                if (target != null && target.isAlive()) {
-                    // ИСПРАВЛЕНО: используем sprinting
-                    return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
-                }
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
 
-        // --- КОНТРОЛЛЕР 2: ДЕЙСТВИЯ (УРОН И АТАКА) ---
-        controllers.add(new AnimationController<>("actions", 0, state -> {
-            // 1. УРОН (высший приоритет)
-            if (this.hurtTime > 0) {
-                return state.setAndContinue(RawAnimation.begin().thenPlay("hurt"));
-            }
-
-            // 2. АТАКА
-            if (this.isAttacking) {
-                return state.setAndContinue(RawAnimation.begin().thenPlay("swipe"));
-            }
-
-            // ИСПРАВЛЕНО: возвращаем STOP вместо пустой анимации, чтобы убрать спам в логах
-            return PlayState.STOP;
-        }));
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-
-        // Управляем таймером атаки
-        if (this.attackTimer > 0) {
-            this.attackTimer--;
-            if (this.attackTimer <= 0) {
-                this.isAttacking = false;
-            }
-        }
+        // --- КОНТРОЛЛЕР 2: ДЕЙСТВИЯ (HURT, SWIPE) ---
+        // Используем готовый triggerOnlyController из DefaultAnimations.
+        // Он сам внутри возвращает PlayState.STOP и не мешает движению.
+        controllers.add(DefaultAnimations.triggerOnlyController("actions")
+                .triggerableAnim("swipe", RawAnimation.begin().thenPlay("swipe"))
+                .triggerableAnim("hurt", RawAnimation.begin().thenPlay("hurt")));
     }
 
     private boolean isMoving() {
-        return this.getDeltaMovement().horizontalDistanceSqr() > 0.0001D;
+        return this.getDeltaMovement().horizontalDistanceSqr() > 0.00001D;
     }
 
     @Override
