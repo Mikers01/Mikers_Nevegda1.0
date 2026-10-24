@@ -31,8 +31,9 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     private int currentHurtVariant = 0;
     private int lastHurtTime = 0;
     private boolean attackTriggered = false;
-    // Счётчик для чередования триггеров (обход проблемы с повторным запуском)
     private int attackCounter = 0;
+    // Тики с момента последней атаки — чтобы sprinting держался ещё немного после удара
+    private int ticksSinceLastAttack = 100;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -87,9 +88,11 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         // Контроллер 1: движение и покой
         controllers.add(new AnimationController<>("main", 5, state -> {
             if (this.isMoving()) {
-                if (this.isMovingFast()) {
+                // Если моб преследует цель или недавно атаковал — sprinting
+                if (this.isChasingTarget() || this.ticksSinceLastAttack < 40) {
                     return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
                 }
+                // Иначе — обычный running
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
@@ -110,7 +113,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         }));
 
         // Контроллер 3: атака (attack1-3)
-        // Регистрируем ДВА набора триггеров, чтобы обойти проблему с повторным запуском
         controllers.add(new AnimationController<>("attack", 0, state -> state.setAndContinue(RawAnimation.begin()))
                 .triggerableAnim("attack1_a", RawAnimation.begin().thenPlay("attack1"))
                 .triggerableAnim("attack1_b", RawAnimation.begin().thenPlay("attack1"))
@@ -124,25 +126,44 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public void tick() {
         super.tick();
 
+        // Тики с последней атаки
+        if (this.ticksSinceLastAttack < 1000) {
+            this.ticksSinceLastAttack++;
+        }
+
         if (this.hurtTime > 0) {
             lastHurtTime = this.hurtTime;
         } else {
             lastHurtTime = 0;
         }
 
-        // Запуск атаки: только на сервере, ровно один раз за взмах
+        // Запуск атаки
         if (!this.level().isClientSide() && this.swinging) {
             if (!attackTriggered) {
                 int variant = this.random.nextInt(3) + 1;
-                // Чередуем суффикс _a и _b, чтобы триггер каждый раз был "новым"
                 String suffix = (attackCounter % 2 == 0) ? "_a" : "_b";
                 this.triggerAnim("attack", "attack" + variant + suffix);
                 attackCounter++;
                 attackTriggered = true;
+                this.ticksSinceLastAttack = 0; // Сбрасываем таймер после удара
             }
         } else {
             attackTriggered = false;
         }
+    }
+
+    /**
+     * Проверяет, преследует ли моб цель (или недавно её видел).
+     * Если да — используется sprinting вместо running.
+     */
+    private boolean isChasingTarget() {
+        LivingEntity target = this.getTarget();
+        if (target == null || !target.isAlive()) {
+            return false;
+        }
+        // Преследует только если цель дальше 2 блоков (вблизи уже идёт атака)
+        double distanceSq = this.distanceToSqr(target);
+        return distanceSq > 4.0D;
     }
 
     private boolean isMoving() {
