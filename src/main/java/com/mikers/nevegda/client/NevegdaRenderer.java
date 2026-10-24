@@ -15,7 +15,14 @@ public class NevegdaRenderer<R extends LivingEntityRenderState & GeoRenderState>
     @Override
     public void addRenderData(NevegdaEntity animatable, Void relatedObject, R renderState, float partialTick) {
         super.addRenderData(animatable, relatedObject, renderState, partialTick);
-        // Берем номер текстуры у сущности и передаем в модель
+        
+        // Передаем вариант текстуры (как было)
         renderState.addGeckolibData(NevegdaModel.VARIANT, animatable.getVariant());
+
+        // --- ПЕРЕДАЧА УГЛОВ ГОЛОВЫ ---
+        // Передаем pitch (наклон вверх/вниз) и yaw (поворот влево/вправо)
+        // Используем стандартные методы LivingEntity
+        renderState.addGeckolibData(NevegdaModel.HEAD_PITCH, animatable.getViewXRot(partialTick));
+        renderState.addGeckolibData(NevegdaModel.HEAD_YAW, animatable.getViewYRot(partialTick));
     }
 }
