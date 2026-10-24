@@ -81,8 +81,9 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>("main", 3, state -> {
-            // 1. УРОН (высший приоритет)
+        // transitionTicks = 0, чтобы hurt и swipe не "съедались" переходом
+        controllers.add(new AnimationController<>("main", 0, state -> {
+            // 1. УРОН
             if (this.hurtTime > 0 && this.hurtTime > lastHurtTime) {
                 return state.setAndContinue(RawAnimation.begin().thenPlay("hurt"));
             }
@@ -110,14 +111,12 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public void tick() {
         super.tick();
 
-        // Отслеживаем момент получения урона
         if (this.hurtTime > 0) {
             lastHurtTime = this.hurtTime;
         } else {
             lastHurtTime = 0;
         }
 
-        // Запуск атаки: только на сервере, ровно один раз за взмах
         if (!this.level().isClientSide() && this.swinging) {
             if (!attackTriggered) {
                 this.attackTriggered = true;
