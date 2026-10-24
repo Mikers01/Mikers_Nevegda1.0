@@ -13,5 +13,8 @@ public class ModEntities {
 
     public static final DeferredHolder<EntityType<?>, EntityType<NevegdaEntity>> NEVEGDA =
             ENTITY_TYPES.registerEntityType("nevegda", NevegdaEntity::new,
-                    MobCategory.MONSTER, builder -> builder.sized(0.8F, 1.8F).clientTrackingRange(10));
+                    MobCategory.MONSTER, builder -> builder
+                            // ХИТБОКС: Ширина/Длина 5.0, Высота 2.5
+                            .sized(5.0F, 2.5F)
+                            .clientTrackingRange(10));
 }
