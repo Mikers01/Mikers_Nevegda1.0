@@ -3,6 +3,7 @@ package com.mikers.nevegda.entity;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
@@ -11,7 +12,6 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
-import net.minecraft.world.entity.ai.targeting.TargetingConditions; // <--- ДОБАВЛЕН ИМПОРТ
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
@@ -31,14 +31,14 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
-        this.setVariant(this.random.nextInt(5) + 1);
+        this.setVariant(this.random.nextInt(5) + 1); // 5 случайных текстур
     }
 
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
-                .add(Attributes.MAX_HEALTH, 500.0D)
-                .add(Attributes.MOVEMENT_SPEED, 0.1F)
-                .add(Attributes.ATTACK_DAMAGE, 1.0D)
+                .add(Attributes.MAX_HEALTH, 500.0D)      // HP Вардена
+                .add(Attributes.MOVEMENT_SPEED, 0.1F)    // Скорость игрока
+                .add(Attributes.ATTACK_DAMAGE, 1.0D)     // Урон кулаком
                 .add(Attributes.FOLLOW_RANGE, 32.0D);
     }
 
@@ -72,21 +72,28 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
         
-        // Теперь TargetingConditions импортирован и доступен
+        // ИСПРАВЛЕНО: Лямбда принимает (entity, level), как требует Selector
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(
                 this, LivingEntity.class, 10, true, false, 
-                (TargetingConditions.Selector) (entity) -> !(entity instanceof NevegdaEntity)
+                (entity, level) -> !(entity instanceof NevegdaEntity)
         ));
     }
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>("main", 5, state -> {
-            if (this.swinging) return state.setAndContinue(RawAnimation.begin().thenPlay("attack"));
+            // Если атакует (взмах)
+            if (this.swinging) {
+                return state.setAndContinue(RawAnimation.begin().thenPlay("attack"));
+            }
+            // Если движется
             if (this.isMoving()) {
-                if (this.isMovingFast()) return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
+                if (this.isMovingFast()) {
+                    return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
+                }
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
+            // В покое
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
     }
