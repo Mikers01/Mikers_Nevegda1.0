@@ -31,6 +31,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     private int currentHurtVariant = 0;
     private int lastHurtTime = 0;
     private boolean attackTriggered = false;
+    // Счётчик для чередования триггеров (обход проблемы с повторным запуском)
+    private int attackCounter = 0;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -107,11 +109,15 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             return state.setAndContinue(RawAnimation.begin());
         }));
 
-        // Контроллер 3: атака (attack1-3) через триггерные анимации
+        // Контроллер 3: атака (attack1-3)
+        // Регистрируем ДВА набора триггеров, чтобы обойти проблему с повторным запуском
         controllers.add(new AnimationController<>("attack", 0, state -> state.setAndContinue(RawAnimation.begin()))
-                .triggerableAnim("attack1", RawAnimation.begin().thenPlay("attack1"))
-                .triggerableAnim("attack2", RawAnimation.begin().thenPlay("attack2"))
-                .triggerableAnim("attack3", RawAnimation.begin().thenPlay("attack3")));
+                .triggerableAnim("attack1_a", RawAnimation.begin().thenPlay("attack1"))
+                .triggerableAnim("attack1_b", RawAnimation.begin().thenPlay("attack1"))
+                .triggerableAnim("attack2_a", RawAnimation.begin().thenPlay("attack2"))
+                .triggerableAnim("attack2_b", RawAnimation.begin().thenPlay("attack2"))
+                .triggerableAnim("attack3_a", RawAnimation.begin().thenPlay("attack3"))
+                .triggerableAnim("attack3_b", RawAnimation.begin().thenPlay("attack3")));
     }
 
     @Override
@@ -128,17 +134,10 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         if (!this.level().isClientSide() && this.swinging) {
             if (!attackTriggered) {
                 int variant = this.random.nextInt(3) + 1;
-
-                // ВАЖНО: сбрасываем контроллер атаки, чтобы триггер сработал заново
-                AnimationController<?> attackController = this.getAnimatableInstanceCache()
-                        .getManagerFor(this)
-                        .getAnimationControllers()
-                        .get("attack");
-                if (attackController != null) {
-                    attackController.forceAnimationReset();
-                }
-
-                this.triggerAnim("attack", "attack" + variant);
+                // Чередуем суффикс _a и _b, чтобы триггер каждый раз был "новым"
+                String suffix = (attackCounter % 2 == 0) ? "_a" : "_b";
+                this.triggerAnim("attack", "attack" + variant + suffix);
+                attackCounter++;
                 attackTriggered = true;
             }
         } else {
