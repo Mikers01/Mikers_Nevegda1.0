@@ -11,7 +11,6 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
-import net.minecraft.world.entity.ai.targeting.TargetingConditions;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
@@ -22,6 +21,8 @@ import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
 import com.geckolib.animation.RawAnimation;
 import com.geckolib.util.GeckoLibUtil;
+
+import java.util.function.Predicate;
 
 public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     private static final EntityDataAccessor<Integer> VARIANT =
@@ -72,11 +73,11 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
         
-        // Используем TargetingConditions.Selector с явным приведением
-        TargetingConditions.Selector selector = (entity) -> !(entity instanceof NevegdaEntity);
+        // Правильная лямбда для Predicate<LivingEntity>
+        Predicate<LivingEntity> targetPredicate = entity -> !(entity instanceof NevegdaEntity);
         
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(
-                this, LivingEntity.class, 10, true, false, selector));
+                this, LivingEntity.class, 10, true, false, targetPredicate));
     }
 
     @Override
