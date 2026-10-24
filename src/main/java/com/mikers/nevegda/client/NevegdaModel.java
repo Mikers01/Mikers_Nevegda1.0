@@ -29,8 +29,5 @@ public class NevegdaModel extends GeoModel<NevegdaEntity> {
         // Формируем путь: mikers_nevegda1.png, mikers_nevegda2.png и т.д.
         return Identifier.fromNamespaceAndPath("mikers_nevegda", "textures/entity/mikers_nevegda" + variant + ".png");
     }
-    @Override
-    public boolean shouldUseHeadTracking() {
-        return true;
-    }
+
 }
