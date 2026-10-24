@@ -4,8 +4,12 @@ import com.mikers.nevegda.entity.NevegdaEntity;
 import net.minecraft.resources.Identifier;
 import com.geckolib.model.GeoModel;
 import com.geckolib.renderer.base.GeoRenderState;
+import com.geckolib.constant.dataticket.DataTicket; // Импорт для DataTicket
 
 public class NevegdaModel extends GeoModel<NevegdaEntity> {
+
+    // Создаем ключ для передачи номера текстуры
+    public static final DataTicket<Integer> VARIANT = DataTicket.create("variant", Integer.class);
 
     @Override
     public Identifier getModelResource(GeoRenderState renderState) {
@@ -19,8 +23,10 @@ public class NevegdaModel extends GeoModel<NevegdaEntity> {
 
     @Override
     public Identifier getTextureResource(GeoRenderState renderState) {
-        // Возвращаем путь с нижним подчеркиванием и строчными буквами
-        // Чтобы это сработало, файлы в папке textures/entity должны называться так же!
-        return Identifier.fromNamespaceAndPath("mikers_nevegda", "textures/entity/mikers_nevegda1.png");
+        // Достаем номер варианта из RenderState (если нет, ставим 1)
+        int variant = renderState.getOrDefaultGeckolibData(VARIANT, 1);
+        
+        // Формируем путь: mikers_nevegda1.png, mikers_nevegda2.png и т.д.
+        return Identifier.fromNamespaceAndPath("mikers_nevegda", "textures/entity/mikers_nevegda" + variant + ".png");
     }
 }
