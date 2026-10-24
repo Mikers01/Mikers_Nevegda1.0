@@ -21,6 +21,7 @@ import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
 import com.geckolib.animation.RawAnimation;
 import com.geckolib.util.GeckoLibUtil;
+import net.minecraft.world.entity.ai.targeting.TargetingConditions;
 
 import java.util.function.Predicate;
 
