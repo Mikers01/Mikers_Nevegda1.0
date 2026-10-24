@@ -30,7 +30,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private int currentHurtVariant = 0;
     private int lastHurtTime = 0;
-    // Флаг, чтобы анимация атаки запускалась ровно один раз за удар
     private boolean attackTriggered = false;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
@@ -119,23 +118,30 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public void tick() {
         super.tick();
 
-        // Отслеживаем получение урона
         if (this.hurtTime > 0) {
             lastHurtTime = this.hurtTime;
         } else {
             lastHurtTime = 0;
         }
 
-        // Запускаем анимацию атаки в момент взмаха (swingTime == 1 — первый тик взмаха)
-        // Только на сервере, чтобы не дублировать на клиенте
+        // Запуск атаки: только на сервере, ровно один раз за взмах
         if (!this.level().isClientSide() && this.swinging) {
             if (!attackTriggered) {
                 int variant = this.random.nextInt(3) + 1;
+
+                // ВАЖНО: сбрасываем контроллер атаки, чтобы триггер сработал заново
+                AnimationController<?> attackController = this.getAnimatableInstanceCache()
+                        .getManagerFor(this)
+                        .getAnimationControllers()
+                        .get("attack");
+                if (attackController != null) {
+                    attackController.forceAnimationReset();
+                }
+
                 this.triggerAnim("attack", "attack" + variant);
                 attackTriggered = true;
             }
         } else {
-            // Сброс флага, когда взмах закончился
             attackTriggered = false;
         }
     }
