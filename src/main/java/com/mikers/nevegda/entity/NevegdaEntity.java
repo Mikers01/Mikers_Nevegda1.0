@@ -11,6 +11,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.ai.targeting.TargetingConditions; // <--- ДОБАВЛЕН ИМПОРТ
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
@@ -21,8 +22,6 @@ import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
 import com.geckolib.animation.RawAnimation;
 import com.geckolib.util.GeckoLibUtil;
-
-import java.util.function.Predicate;
 
 public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     private static final EntityDataAccessor<Integer> VARIANT =
@@ -70,10 +69,10 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.0D, false));
         this.goalSelector.addGoal(2, new WaterAvoidingRandomStrollGoal(this, 1.0D));
         this.goalSelector.addGoal(3, new LookAtPlayerGoal(this, Player.class, 8.0F));
-    
+
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
         
-        // Используем лямбду напрямую, без промежуточной переменной
+        // Теперь TargetingConditions импортирован и доступен
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(
                 this, LivingEntity.class, 10, true, false, 
                 (TargetingConditions.Selector) (entity) -> !(entity instanceof NevegdaEntity)
