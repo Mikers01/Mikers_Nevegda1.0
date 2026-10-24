@@ -28,11 +28,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    // --- Поля для управления анимациями ---
-    private int currentHurtVariant = 0;
     private int lastHurtTime = 0;
     private boolean attackTriggered = false;
-    private int currentAttackVariant = 1;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -84,22 +81,15 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // ОДИН контроллер для всего: hurt -> attack -> движение -> idle
         controllers.add(new AnimationController<>("main", 3, state -> {
-            // 1. УРОН (наивысший приоритет)
+            // 1. УРОН (высший приоритет)
             if (this.hurtTime > 0 && this.hurtTime > lastHurtTime) {
-                if (currentHurtVariant == 0) {
-                    currentHurtVariant = this.random.nextInt(3) + 1;
-                }
-                return state.setAndContinue(RawAnimation.begin().thenPlay("hurt" + currentHurtVariant));
-            }
-            if (this.hurtTime == 0) {
-                currentHurtVariant = 0;
+                return state.setAndContinue(RawAnimation.begin().thenPlay("hurt"));
             }
 
             // 2. АТАКА
             if (this.attackTriggered) {
-                return state.setAndContinue(RawAnimation.begin().thenPlay("attack" + this.currentAttackVariant));
+                return state.setAndContinue(RawAnimation.begin().thenPlay("swipe"));
             }
 
             // 3. ДВИЖЕНИЕ
@@ -130,7 +120,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         // Запуск атаки: только на сервере, ровно один раз за взмах
         if (!this.level().isClientSide() && this.swinging) {
             if (!attackTriggered) {
-                this.currentAttackVariant = this.random.nextInt(3) + 1;
                 this.attackTriggered = true;
             }
         } else {
