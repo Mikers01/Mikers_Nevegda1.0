@@ -4,7 +4,7 @@ plugins {
 }
 
 version = mod_version
-group = 'com.mikers.snuffles'
+group = 'com.mikers.nevegda'
 base { archivesName = mod_id }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
