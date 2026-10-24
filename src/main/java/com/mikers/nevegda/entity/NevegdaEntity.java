@@ -70,7 +70,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         this.goalSelector.addGoal(3, new LookAtPlayerGoal(this, Player.class, 8.0F));
 
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
-        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, LivingEntity.class, 10, true, false,
+        // Явно указываем тип <LivingEntity>
+        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(this, LivingEntity.class, 10, true, false,
                 (entity) -> !(entity instanceof NevegdaEntity)
         ));
     }
@@ -80,7 +81,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         controllers.add(new AnimationController<>("main", 5, state -> {
             if (this.swinging) return state.setAndContinue(RawAnimation.begin().thenPlay("attack"));
             if (this.isMoving()) {
-                if (this.isSprinting()) return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
+                // Переименовали вызов, чтобы не конфликтовать с ванильным isSprinting()
+                if (this.isMovingFast()) return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
@@ -91,7 +93,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.001D;
     }
 
-    private boolean isSprinting() {
+    // Переименованный метод
+    private boolean isMovingFast() {
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.05D;
     }
 
