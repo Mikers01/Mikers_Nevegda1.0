@@ -11,6 +11,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.ai.targeting.TargetingConditions;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
@@ -70,10 +71,12 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         this.goalSelector.addGoal(3, new LookAtPlayerGoal(this, Player.class, 8.0F));
 
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
-        // Явно указываем тип <LivingEntity>
-        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(this, LivingEntity.class, 10, true, false,
-                (entity) -> !(entity instanceof NevegdaEntity)
-        ));
+        
+        // Используем TargetingConditions.Selector с явным приведением
+        TargetingConditions.Selector selector = (entity) -> !(entity instanceof NevegdaEntity);
+        
+        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(
+                this, LivingEntity.class, 10, true, false, selector));
     }
 
     @Override
@@ -81,7 +84,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         controllers.add(new AnimationController<>("main", 5, state -> {
             if (this.swinging) return state.setAndContinue(RawAnimation.begin().thenPlay("attack"));
             if (this.isMoving()) {
-                // Переименовали вызов, чтобы не конфликтовать с ванильным isSprinting()
                 if (this.isMovingFast()) return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
@@ -93,7 +95,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.001D;
     }
 
-    // Переименованный метод
     private boolean isMovingFast() {
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.05D;
     }
