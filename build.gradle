@@ -1,0 +1,55 @@
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev' version '2.0.147'
+}
+
+version = mod_version
+group = 'com.mikers.snuffles'
+base { archivesName = mod_id }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+neoForge {
+    version = project.neo_version
+}
+
+repositories {
+    mavenCentral()
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'GeckoLib'
+                url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+            }
+        }
+        // GeckoLib 5 использует group 'com.geckolib' [citation:3][citation:10]
+        filter { includeGroupAndSubgroups('com.geckolib') }
+    }
+}
+
+dependencies {
+    // Правильный артефакт для NeoForge 26.2 (GeckoLib 5) [citation:10][citation:13]
+    implementation "com.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
+    interfaceInjectionData "com.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            minecraft_version: minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version: neo_version,
+            mod_id: mod_id,
+            mod_name: mod_name,
+            mod_license: mod_license,
+            mod_version: mod_version,
+            geckolib_version: geckolib_version
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
