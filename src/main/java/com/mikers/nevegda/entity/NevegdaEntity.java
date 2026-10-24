@@ -9,6 +9,7 @@ import com.geckolib.util.GeckoLibUtil;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
@@ -28,8 +29,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    // Флаги для управления анимациями
-    private boolean isSwinging = false;
+    // Флаг для атаки, управляемый вручную
+    private boolean isAttacking = false;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -79,30 +80,39 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         ));
     }
 
+    // ПЕРЕОПРЕДЕЛЯЕМ МЕТОД АТАКИ
+    @Override
+    public boolean doHurtTarget(Entity target) {
+        // Включаем флаг атаки. В контроллере он переключит анимацию на swipe.
+        this.isAttacking = true;
+        return super.doHurtTarget(target);
+    }
+
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>("main", 2, state -> {
-            // 1. HURT (если недавно получили урон)
+            // 1. HURT (высший приоритет)
             if (this.hurtTime > 0) {
                 return state.setAndContinue(RawAnimation.begin().thenPlay("hurt"));
             }
 
             // 2. SWIPE (если недавно ударили)
-            if (this.isSwinging) {
+            if (this.isAttacking) {
                 return state.setAndContinue(RawAnimation.begin().thenPlay("swipe"));
             }
 
-            // 3. SPRINTING (если движемся И есть цель)
+            // 3. ДВИЖЕНИЕ
             if (this.isMoving()) {
                 LivingEntity target = this.getTarget();
+                // Если есть цель и она жива - бежим (sprinting)
                 if (target != null && target.isAlive()) {
                     return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
                 }
-                // 4. RUNNING (если движемся без цели)
+                // Иначе просто идем (running)
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
 
-            // 5. IDLE
+            // 4. IDLE
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
     }
@@ -111,17 +121,20 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public void tick() {
         super.tick();
 
-        // Логика для SWIPE: если моб начал махать рукой, включаем флаг
-        // ИСПРАВЛЕНО: isClientSide() с методом, а не полем
-        if (!this.level().isClientSide() && this.swinging) {
-            this.isSwinging = true;
-        } else {
-            this.isSwinging = false;
+        // Сбрасываем флаг атаки через некоторое время, чтобы анимация swipe успела проиграться.
+        // 10 тиков = 0.5 секунды (как раз длина твоей анимации).
+        if (this.isAttacking) {
+            // Если моб в креативе или анимация не успевает, можно использовать таймер.
+            // Но проще всего сбрасывать флаг, когда swinging заканчивается.
+            if (!this.swinging && !this.level().isClientSide()) {
+                this.isAttacking = false;
+            }
         }
     }
 
     private boolean isMoving() {
-        return this.getDeltaMovement().horizontalDistanceSqr() > 0.001D;
+        // Чуть более мягкий порог, чтобы sprinting срабатывал даже на небольшой скорости
+        return this.getDeltaMovement().horizontalDistanceSqr() > 0.0001D;
     }
 
     @Override
