@@ -28,8 +28,9 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    private int lastHurtTime = 0;
-    private boolean attackTriggered = false;
+    // Флаги для управления анимациями
+    private boolean isSwinging = false;
+    private int hurtTimeTracker = 0;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -81,28 +82,29 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // transitionTicks = 0, чтобы hurt и swipe не "съедались" переходом
-        controllers.add(new AnimationController<>("main", 0, state -> {
-            // 1. УРОН
-            if (this.hurtTime > 0 && this.hurtTime > lastHurtTime) {
+        // Один контроллер, transitionTicks = 2 для плавности, но не для "съедания" анимаций
+        controllers.add(new AnimationController<>("main", 2, state -> {
+            // 1. HURT (если недавно получили урон)
+            if (this.hurtTime > 0) {
                 return state.setAndContinue(RawAnimation.begin().thenPlay("hurt"));
             }
 
-            // 2. АТАКА
-            if (this.attackTriggered) {
+            // 2. SWIPE (если недавно ударили)
+            if (this.isSwinging) {
                 return state.setAndContinue(RawAnimation.begin().thenPlay("swipe"));
             }
 
-            // 3. ДВИЖЕНИЕ
+            // 3. SPRINTING (если движемся И есть цель)
             if (this.isMoving()) {
                 LivingEntity target = this.getTarget();
                 if (target != null && target.isAlive()) {
                     return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
                 }
+                // 4. RUNNING (если движемся без цели)
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
             }
 
-            // 4. ПОКОЙ
+            // 5. IDLE
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
     }
@@ -111,18 +113,11 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public void tick() {
         super.tick();
 
-        if (this.hurtTime > 0) {
-            lastHurtTime = this.hurtTime;
+        // Логика для SWIPE: если моб начал махать рукой, включаем флаг
+        if (!this.level().isClientSide && this.swinging) {
+            this.isSwinging = true;
         } else {
-            lastHurtTime = 0;
-        }
-
-        if (!this.level().isClientSide() && this.swinging) {
-            if (!attackTriggered) {
-                this.attackTriggered = true;
-            }
-        } else {
-            this.attackTriggered = false;
+            this.isSwinging = false;
         }
     }
 
