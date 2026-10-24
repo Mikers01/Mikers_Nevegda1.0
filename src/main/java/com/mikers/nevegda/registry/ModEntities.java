@@ -15,6 +15,6 @@ public class ModEntities {
             ENTITY_TYPES.registerEntityType("nevegda", NevegdaEntity::new,
                     MobCategory.MONSTER, builder -> builder
                             // ХИТБОКС: Ширина/Длина 5.0, Высота 2.5
-                            .sized(5.0F, 2.5F)
+                            .sized(1.0F, 2.5F)
                             .clientTrackingRange(10));
 }
