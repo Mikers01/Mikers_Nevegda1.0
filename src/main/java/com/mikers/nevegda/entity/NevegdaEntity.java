@@ -31,7 +31,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     private int currentHurtVariant = 0;
     private int lastHurtTime = 0;
     private boolean attackTriggered = false;
-    private int ticksSinceLastAttack = 100;
+    private int currentAttackVariant = 1;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -86,7 +86,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         // Контроллер 1: движение и покой
         controllers.add(new AnimationController<>("main", 5, state -> {
             if (this.isMoving()) {
-                if (this.isChasingTarget() || this.ticksSinceLastAttack < 40) {
+                LivingEntity target = this.getTarget();
+                if (target != null && target.isAlive()) {
                     return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
                 }
                 return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
@@ -108,23 +109,18 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             return state.setAndContinue(RawAnimation.begin());
         }));
 
-        // Контроллеры 3-5: отдельные контроллеры для каждой атаки
-        // Это решает проблему с повторным запуском одного и того же триггера
-        controllers.add(new AnimationController<>("attack1", 0, state -> state.setAndContinue(RawAnimation.begin()))
-                .triggerableAnim("play", RawAnimation.begin().thenPlay("attack1")));
-        controllers.add(new AnimationController<>("attack2", 0, state -> state.setAndContinue(RawAnimation.begin()))
-                .triggerableAnim("play", RawAnimation.begin().thenPlay("attack2")));
-        controllers.add(new AnimationController<>("attack3", 0, state -> state.setAndContinue(RawAnimation.begin()))
-                .triggerableAnim("play", RawAnimation.begin().thenPlay("attack3")));
+        // Контроллер 3: атака (attack1-3) — обычный контроллер, без триггеров
+        controllers.add(new AnimationController<>("attack", 0, state -> {
+            if (this.attackTriggered) {
+                return state.setAndContinue(RawAnimation.begin().thenPlay("attack" + this.currentAttackVariant));
+            }
+            return state.setAndContinue(RawAnimation.begin());
+        }));
     }
 
     @Override
     public void tick() {
         super.tick();
-
-        if (this.ticksSinceLastAttack < 1000) {
-            this.ticksSinceLastAttack++;
-        }
 
         if (this.hurtTime > 0) {
             lastHurtTime = this.hurtTime;
@@ -132,28 +128,15 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             lastHurtTime = 0;
         }
 
+        // Запуск атаки: только на сервере, ровно один раз за взмах
         if (!this.level().isClientSide() && this.swinging) {
             if (!attackTriggered) {
-                int variant = this.random.nextInt(3) + 1;
-                String controllerName = "attack" + variant;
-                // Принудительно останавливаем предыдущую триггерную анимацию, чтобы её можно было запустить заново
-                this.stopTriggeredAnim(controllerName, "play");
-                this.triggerAnim(controllerName, "play");
-                attackTriggered = true;
-                this.ticksSinceLastAttack = 0;
+                this.currentAttackVariant = this.random.nextInt(3) + 1;
+                this.attackTriggered = true;
             }
         } else {
-            attackTriggered = false;
+            this.attackTriggered = false;
         }
-    }
-
-    private boolean isChasingTarget() {
-        LivingEntity target = this.getTarget();
-        if (target == null || !target.isAlive()) {
-            return false;
-        }
-        double distanceSq = this.distanceToSqr(target);
-        return distanceSq > 4.0D;
     }
 
     private boolean isMoving() {
