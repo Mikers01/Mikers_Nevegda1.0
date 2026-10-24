@@ -70,14 +70,14 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.0D, false));
         this.goalSelector.addGoal(2, new WaterAvoidingRandomStrollGoal(this, 1.0D));
         this.goalSelector.addGoal(3, new LookAtPlayerGoal(this, Player.class, 8.0F));
-
+    
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
         
-        // Правильная лямбда для Predicate<LivingEntity>
-        Predicate<LivingEntity> targetPredicate = entity -> !(entity instanceof NevegdaEntity);
-        
+        // Используем TargetingConditions.Selector (правильный тип)
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<LivingEntity>(
-                this, LivingEntity.class, 10, true, false, targetPredicate));
+                this, LivingEntity.class, 10, true, false, 
+                (TargetingConditions.Selector) (entity) -> !(entity instanceof NevegdaEntity)
+        ));
     }
 
     @Override
