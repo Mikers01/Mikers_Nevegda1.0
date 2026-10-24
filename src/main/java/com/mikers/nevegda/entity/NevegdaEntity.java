@@ -4,7 +4,6 @@ import com.geckolib.animatable.GeoEntity;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
-import com.geckolib.animation.PlayState;
 import com.geckolib.animation.RawAnimation;
 import com.geckolib.util.GeckoLibUtil;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -82,7 +81,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // --- Контроллер 1: Движение и покой ---
+        // Контроллер 1: движение и покой (низкий приоритет)
         controllers.add(new AnimationController<>("main", 5, state -> {
             if (this.isMoving()) {
                 if (this.isMovingFast()) {
@@ -93,7 +92,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
 
-        // --- Контроллер 2: Урон (hurt1-3) ---
+        // Контроллер 2: получение урона (высокий приоритет, прерывает движение/покой)
         controllers.add(new AnimationController<>("action", 0, state -> {
             if (this.hurtTime > 0 && this.hurtTime > lastHurtTime) {
                 if (currentHurtVariant == 0) {
@@ -104,32 +103,31 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             if (this.hurtTime == 0) {
                 currentHurtVariant = 0;
             }
-            return PlayState.STOP;
+            return state.setAndContinue(RawAnimation.begin()); // пустая анимация, не влияет
         }));
 
-        // --- Контроллер 3: Атака (attack1-3) через triggerableAnim ---
-        controllers.add(new AnimationController<>("attack", 0, state -> {
-            // Если swinging true — запускаем случайную атаку через trigger
-            if (this.swinging) {
-                // triggerableAnim запускает анимацию один раз и не блокирует контроллер
-                if (!state.isCurrentAnimation(RawAnimation.begin().thenPlay("attack1")) &&
-                    !state.isCurrentAnimation(RawAnimation.begin().thenPlay("attack2")) &&
-                    !state.isCurrentAnimation(RawAnimation.begin().thenPlay("attack3"))) {
-                    int variant = this.random.nextInt(3) + 1;
-                    state.setAnimation(RawAnimation.begin().thenPlay("attack" + variant));
-                }
-            }
-            return PlayState.CONTINUE;
-        }));
+        // Контроллер 3: анимация атаки (запускается по триггеру, не мешает другим контроллерам)
+        controllers.add(new AnimationController<>("attack", 0, state -> state.setAndContinue(RawAnimation.begin()))
+                .triggerableAnim("attack1", RawAnimation.begin().thenPlay("attack1"))
+                .triggerableAnim("attack2", RawAnimation.begin().thenPlay("attack2"))
+                .triggerableAnim("attack3", RawAnimation.begin().thenPlay("attack3")));
     }
 
     @Override
     public void tick() {
         super.tick();
+
+        // Отслеживаем получение урона
         if (this.hurtTime > 0) {
             lastHurtTime = this.hurtTime;
         } else {
             lastHurtTime = 0;
+        }
+
+        // Запускаем анимацию атаки при взмахе рукой (только на сервере, чтобы избежать дублирования на клиенте)
+        if (!this.level().isClientSide() && this.swinging && this.swingingTime == 1) {
+            int variant = this.random.nextInt(3) + 1;
+            this.triggerAnim("attack", "attack" + variant);
         }
     }
 
