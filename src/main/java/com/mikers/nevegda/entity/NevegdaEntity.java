@@ -35,6 +35,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
         this.setVariant(this.random.nextInt(5) + 1);
+        // БЕССМЕРТИЕ: Моб не будет деспавниться (как с биркой)
+        this.setPersistenceRequired();
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -80,7 +82,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         ));
     }
 
-    // --- АТАКА (не трогаем, работает) ---
     @Override
     public boolean doHurtTarget(ServerLevel level, Entity target) {
         if (!this.level().isClientSide()) {
@@ -89,7 +90,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         return super.doHurtTarget(level, target);
     }
 
-    // --- УРОН (не трогаем, работает) ---
     @Override
     public boolean hurtServer(ServerLevel level, DamageSource source, float amount) {
         if (!this.level().isClientSide() && this.hurtTime == 0) {
@@ -100,10 +100,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // --- КОНТРОЛЛЕР 1: ДВИЖЕНИЕ (ИСПРАВЛЕНО) ---
         controllers.add(new AnimationController<>("movement", 3, state -> {
-            // ИСПРАВЛЕНО: проверяем isAggressive() — это надёжнее, чем getTarget()
-            // isAggressive() остаётся true, даже если цель на мгновение пропала
             if (this.isAggressive()) {
                 return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
             }
@@ -113,7 +110,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
 
-        // --- КОНТРОЛЛЕР 2: ДЕЙСТВИЯ (НЕ ТРОГАЕМ, РАБОТАЕТ) ---
         controllers.add(DefaultAnimations.triggerOnlyController()
                 .triggerableAnim("swipe", RawAnimation.begin().thenPlay("swipe"))
                 .triggerableAnim("hurt", RawAnimation.begin().thenPlay("hurt")));
@@ -121,6 +117,18 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private boolean isMoving() {
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.00001D;
+    }
+
+    // БЕССМЕРТИЕ: Запрещаем естественный деспавн (когда игрок далеко)
+    @Override
+    public boolean removeWhenFarAway(double distanceToClosestPlayer) {
+        return false;
+    }
+
+    // БЕССМЕРТИЕ: Исключаем из лимита враждебных мобов (mob cap)
+    @Override
+    public boolean isPersistenceRequired() {
+        return true;
     }
 
     @Override
