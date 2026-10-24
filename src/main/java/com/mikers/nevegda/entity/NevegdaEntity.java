@@ -9,6 +9,7 @@ import com.geckolib.util.GeckoLibUtil;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -29,8 +30,9 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    // Флаг для атаки, управляемый вручную
+    // Флаг для атаки (сбрасывается через таймер, чтобы анимация успела проиграться)
     private boolean isAttacking = false;
+    private int attackTimer = 0;
 
     public NevegdaEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -80,40 +82,48 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         ));
     }
 
-    // ПЕРЕОПРЕДЕЛЯЕМ МЕТОД АТАКИ (с учетом NeoForge 26.2)
+    // ПЕРЕОПРЕДЕЛЯЕМ МЕТОД АТАКИ (NeoForge 26.2)
     @Override
-    public boolean doHurtTarget(net.minecraft.server.level.ServerLevel level, Entity target) {
-        // Включаем флаг атаки. В контроллере он переключит анимацию на swipe.
+    public boolean doHurtTarget(ServerLevel level, Entity target) {
+        // Включаем флаг атаки и ставим таймер на 10 тиков (0.5 сек — длина swipe)
         this.isAttacking = true;
+        this.attackTimer = 10;
         return super.doHurtTarget(level, target);
     }
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>("main", 2, state -> {
-            // 1. HURT (высший приоритет)
+        // --- КОНТРОЛЛЕР 1: ДВИЖЕНИЕ (idle, running, sprinting) ---
+        // transitionTicks = 3 для плавного перехода между бегом и ходьбой
+        controllers.add(new AnimationController<>("movement", 3, state -> {
+            if (this.isMoving()) {
+                LivingEntity target = this.getTarget();
+                if (target != null && target.isAlive()) {
+                    return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
+                }
+                return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
+            }
+            return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
+        }));
+
+        // --- КОНТРОЛЛЕР 2: ДЕЙСТВИЯ (hurt, swipe) ---
+        // transitionTicks = 0, чтобы анимация начиналась мгновенно
+        // Этот контроллер имеет более высокий приоритет (добавлен позже), 
+        // поэтому его анимации будут перекрывать движение рук/тела из первого контроллера.
+        controllers.add(new AnimationController<>("actions", 0, state -> {
+            // 1. УРОН (высший приоритет)
             if (this.hurtTime > 0) {
                 return state.setAndContinue(RawAnimation.begin().thenPlay("hurt"));
             }
 
-            // 2. SWIPE (если недавно ударили)
+            // 2. АТАКА
             if (this.isAttacking) {
                 return state.setAndContinue(RawAnimation.begin().thenPlay("swipe"));
             }
 
-            // 3. ДВИЖЕНИЕ
-            if (this.isMoving()) {
-                LivingEntity target = this.getTarget();
-                // Если есть цель и она жива - бежим (sprinting)
-                if (target != null && target.isAlive()) {
-                    return state.setAndContinue(RawAnimation.begin().thenLoop("sprinting"));
-                }
-                // Иначе просто идем (running)
-                return state.setAndContinue(RawAnimation.begin().thenLoop("running"));
-            }
-
-            // 4. IDLE
-            return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
+            // Если ничего не происходит — останавливаем контроллер, 
+            // чтобы он не перебивал движение.
+            return state.setAndContinue(RawAnimation.begin());
         }));
     }
 
@@ -121,19 +131,16 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     public void tick() {
         super.tick();
 
-        // Сбрасываем флаг атаки через некоторое время, чтобы анимация swipe успела проиграться.
-        // 10 тиков = 0.5 секунды (как раз длина твоей анимации).
-        if (this.isAttacking) {
-            // Если моб в креативе или анимация не успевает, можно использовать таймер.
-            // Но проще всего сбрасывать флаг, когда swinging заканчивается.
-            if (!this.swinging && !this.level().isClientSide()) {
+        // Управляем таймером атаки
+        if (this.attackTimer > 0) {
+            this.attackTimer--;
+            if (this.attackTimer <= 0) {
                 this.isAttacking = false;
             }
         }
     }
 
     private boolean isMoving() {
-        // Чуть более мягкий порог, чтобы sprinting срабатывал даже на небольшой скорости
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.0001D;
     }
 
