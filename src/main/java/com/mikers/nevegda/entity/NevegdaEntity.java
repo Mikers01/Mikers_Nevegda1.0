@@ -234,6 +234,12 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     }
 
     @Override
+protected void tickDeath() {
+    if (this.deathTime == 0) {
+        this.deathTime = 1;
+    }
+
+    @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
         return this.cache;
     }
