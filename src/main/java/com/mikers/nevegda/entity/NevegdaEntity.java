@@ -121,6 +121,16 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         super.die(source);
     }
 
+    // --- ИСПРАВЛЕНИЕ НАКЛОНА ПРИ СМЕРТИ ---
+    @Override
+    protected void tickDeath() {
+        // Замораживаем deathTime на 1, чтобы ванильный наклон не работал.
+        // Моб всё равно исчезнет через стандартное время, но без кривого наклона.
+        if (this.deathTime == 0) {
+            this.deathTime = 1; 
+        }
+    }
+
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>("movement", 3, state -> {
@@ -186,7 +196,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         public boolean canUse() {
             if (this.mob.getTarget() != null) return false;
             
-            // Ищем союзников в радиусе 30 блоков (чтобы было кого искать)
+            // Ищем союзников в радиусе 30 блоков
             List<NevegdaEntity> allies = this.mob.level().getEntitiesOfClass(
                     NevegdaEntity.class,
                     this.mob.getBoundingBox().inflate(30.0D),
@@ -194,7 +204,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             );
             if (allies.isEmpty()) return false;
             
-            // Ищем ближайшего (или первого) союзника
             this.leader = allies.get(0);
             
             // Начинаем двигаться ТОЛЬКО если расстояние больше 15 блоков (225 квадратов)
@@ -210,7 +219,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
         @Override
         public boolean canContinueToUse() {
-            // Продолжаем идти, пока не подойдем на 15 блоков (или цель не появится)
+            // Продолжаем идти, пока не подойдем на 15 блоков
             return this.leader != null && this.leader.isAlive() 
                     && this.mob.getTarget() == null 
                     && this.mob.distanceToSqr(this.leader) > 225.0D;
@@ -231,12 +240,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     @Override
     public boolean isPersistenceRequired() {
         return true;
-    }
-
-    @Override
-protected void tickDeath() {
-    if (this.deathTime == 0) {
-        this.deathTime = 1;
     }
 
     @Override
