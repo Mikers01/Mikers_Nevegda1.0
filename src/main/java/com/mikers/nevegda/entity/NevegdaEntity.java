@@ -26,6 +26,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
@@ -74,6 +75,8 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
+        // Добавлен Рывок (Charge) на приоритет 1 (выше, чем следование)
+        this.goalSelector.addGoal(1, new ChargeGoal(this, 1.5D));
         this.goalSelector.addGoal(2, new FollowGroupGoal(this, 1.0D));
         this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.0D, false));
         this.goalSelector.addGoal(4, new WaterAvoidingRandomStrollGoal(this, 1.0D));
@@ -133,13 +136,17 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
 
+        // Добавлены look_around3, 4, 5
         controllers.add(DefaultAnimations.triggerOnlyController()
                 .triggerableAnim("swipe", RawAnimation.begin().thenPlay("swipe"))
                 .triggerableAnim("hurt", RawAnimation.begin().thenPlay("hurt"))
                 .triggerableAnim("death", RawAnimation.begin().thenPlay("death"))
-                // Добавляем две новые анимации осмотра
                 .triggerableAnim("look_around1", RawAnimation.begin().thenPlay("look_around1"))
-                .triggerableAnim("look_around2", RawAnimation.begin().thenPlay("look_around2")));
+                .triggerableAnim("look_around2", RawAnimation.begin().thenPlay("look_around2"))
+                .triggerableAnim("look_around3", RawAnimation.begin().thenPlay("look_around3"))
+                .triggerableAnim("look_around4", RawAnimation.begin().thenPlay("look_around4"))
+                .triggerableAnim("look_around5", RawAnimation.begin().thenPlay("look_around5"))
+                .triggerableAnim("charge", RawAnimation.begin().thenPlay("charge"))); // Анимация для рывка
     }
 
     private int lookTimer = 0;
@@ -150,11 +157,14 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         if (!this.level().isClientSide() && !this.isAggressive() && !this.isMoving() && !this.isDeadOrDying()) {
             lookTimer++;
             if (lookTimer >= 100) {
-                // Рандомно выбираем одну из двух анимаций
-                if (this.random.nextBoolean()) {
-                    this.triggerAnim("Actions", "look_around1");
-                } else {
-                    this.triggerAnim("Actions", "look_around2");
+                // Рандомно выбираем одну из пяти анимаций
+                int choice = this.random.nextInt(5);
+                switch (choice) {
+                    case 0: this.triggerAnim("Actions", "look_around1"); break;
+                    case 1: this.triggerAnim("Actions", "look_around2"); break;
+                    case 2: this.triggerAnim("Actions", "look_around3"); break;
+                    case 3: this.triggerAnim("Actions", "look_around4"); break;
+                    case 4: this.triggerAnim("Actions", "look_around5"); break;
                 }
                 lookTimer = 0;
             }
@@ -165,6 +175,55 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
     private boolean isMoving() {
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.00001D;
+    }
+
+    // --- КАСТОМНАЯ ЦЕЛЬ: РЫВОК (CHARGE) ---
+    public static class ChargeGoal extends Goal {
+        private final NevegdaEntity mob;
+        private final double speedModifier;
+        private int cooldown = 0;
+
+        public ChargeGoal(NevegdaEntity mob, double speedModifier) {
+            this.mob = mob;
+            this.speedModifier = speedModifier;
+        }
+
+        @Override
+        public boolean canUse() {
+            if (cooldown > 0) {
+                cooldown--;
+                return false;
+            }
+            LivingEntity target = this.mob.getTarget();
+            if (target == null) return false;
+            
+            double distance = this.mob.distanceToSqr(target);
+            // Рывок, если цель на расстоянии от 4 до 10 блоков (от 16 до 100 квадратов)
+            if (distance < 16.0D || distance > 100.0D) return false;
+
+            // Проверяем, есть ли прямая видимость (чтобы не врезаться в стену)
+            return this.mob.getSensing().hasLineOfSight(target);
+        }
+
+        @Override
+        public void start() {
+            LivingEntity target = this.mob.getTarget();
+            if (target != null) {
+                // Запускаем анимацию рывка
+                this.mob.triggerAnim("Actions", "charge");
+                
+                // Вычисляем направление на цель
+                Vec3 direction = target.position().subtract(this.mob.position()).normalize();
+                // Придаем мобу импульс вперед
+                this.mob.setDeltaMovement(direction.x * speedModifier, this.mob.getDeltaMovement().y, direction.z * speedModifier);
+            }
+            this.cooldown = 100; // Кулдаун 5 секунд (100 тиков)
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return false; // Рывок мгновенный (импульс), цель сразу завершается
+        }
     }
 
     public static class FollowGroupGoal extends Goal {
