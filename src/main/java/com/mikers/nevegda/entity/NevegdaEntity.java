@@ -121,13 +121,17 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         super.die(source);
     }
 
-    // --- ИСПРАВЛЕНИЕ НАКЛОНА ПРИ СМЕРТИ ---
+    // --- ИСПРАВЛЕННЫЙ tickDeath(): даём анимации доиграть, но не замораживаем моба ---
     @Override
     protected void tickDeath() {
-        // Замораживаем deathTime на 1, чтобы ванильный наклон не работал.
-        // Моб всё равно исчезнет через стандартное время, но без кривого наклона.
-        if (this.deathTime == 0) {
-            this.deathTime = 1; 
+        // Не вызываем super.tickDeath(), чтобы не увеличивать deathTime и не вызывать наклон.
+        // Вместо этого запускаем ручной таймер исчезновения через 25 тиков (1.25 сек).
+        if (!this.level().isClientSide()) {
+            this.deathTime++;
+            if (this.deathTime >= 25) {
+                this.remove(Entity.RemovalReason.KILLED);
+                this.gameEvent(net.minecraft.world.level.gameevent.GameEvent.ENTITY_DIE);
+            }
         }
     }
 
@@ -181,7 +185,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.00001D;
     }
 
-    // --- СТАЯ: Держаться на расстоянии 15 блоков ---
     public static class FollowGroupGoal extends Goal {
         private final NevegdaEntity mob;
         private final double speedModifier;
@@ -195,18 +198,13 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         @Override
         public boolean canUse() {
             if (this.mob.getTarget() != null) return false;
-            
-            // Ищем союзников в радиусе 30 блоков
             List<NevegdaEntity> allies = this.mob.level().getEntitiesOfClass(
                     NevegdaEntity.class,
                     this.mob.getBoundingBox().inflate(30.0D),
                     (entity) -> entity != this.mob && entity.isAlive()
             );
             if (allies.isEmpty()) return false;
-            
             this.leader = allies.get(0);
-            
-            // Начинаем двигаться ТОЛЬКО если расстояние больше 15 блоков (225 квадратов)
             return this.mob.distanceToSqr(this.leader) > 225.0D;
         }
 
@@ -219,7 +217,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
         @Override
         public boolean canContinueToUse() {
-            // Продолжаем идти, пока не подойдем на 15 блоков
             return this.leader != null && this.leader.isAlive() 
                     && this.mob.getTarget() == null 
                     && this.mob.distanceToSqr(this.leader) > 225.0D;
