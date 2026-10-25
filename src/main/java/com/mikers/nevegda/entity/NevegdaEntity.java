@@ -26,7 +26,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
@@ -75,8 +74,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
-        // Добавлен Рывок (Charge) на приоритет 1 (выше, чем следование)
-        this.goalSelector.addGoal(1, new ChargeGoal(this, 1.5D));
         this.goalSelector.addGoal(2, new FollowGroupGoal(this, 1.0D));
         this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.0D, false));
         this.goalSelector.addGoal(4, new WaterAvoidingRandomStrollGoal(this, 1.0D));
@@ -136,7 +133,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
             return state.setAndContinue(RawAnimation.begin().thenLoop("idle"));
         }));
 
-        // Добавлены look_around3, 4, 5
         controllers.add(DefaultAnimations.triggerOnlyController()
                 .triggerableAnim("swipe", RawAnimation.begin().thenPlay("swipe"))
                 .triggerableAnim("hurt", RawAnimation.begin().thenPlay("hurt"))
@@ -145,8 +141,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
                 .triggerableAnim("look_around2", RawAnimation.begin().thenPlay("look_around2"))
                 .triggerableAnim("look_around3", RawAnimation.begin().thenPlay("look_around3"))
                 .triggerableAnim("look_around4", RawAnimation.begin().thenPlay("look_around4"))
-                .triggerableAnim("look_around5", RawAnimation.begin().thenPlay("look_around5"))
-                .triggerableAnim("charge", RawAnimation.begin().thenPlay("charge"))); // Анимация для рывка
+                .triggerableAnim("look_around5", RawAnimation.begin().thenPlay("look_around5")));
     }
 
     private int lookTimer = 0;
@@ -157,7 +152,6 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         if (!this.level().isClientSide() && !this.isAggressive() && !this.isMoving() && !this.isDeadOrDying()) {
             lookTimer++;
             if (lookTimer >= 100) {
-                // Рандомно выбираем одну из пяти анимаций
                 int choice = this.random.nextInt(5);
                 switch (choice) {
                     case 0: this.triggerAnim("Actions", "look_around1"); break;
@@ -177,55 +171,7 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         return this.getDeltaMovement().horizontalDistanceSqr() > 0.00001D;
     }
 
-    // --- КАСТОМНАЯ ЦЕЛЬ: РЫВОК (CHARGE) ---
-    public static class ChargeGoal extends Goal {
-        private final NevegdaEntity mob;
-        private final double speedModifier;
-        private int cooldown = 0;
-
-        public ChargeGoal(NevegdaEntity mob, double speedModifier) {
-            this.mob = mob;
-            this.speedModifier = speedModifier;
-        }
-
-        @Override
-        public boolean canUse() {
-            if (cooldown > 0) {
-                cooldown--;
-                return false;
-            }
-            LivingEntity target = this.mob.getTarget();
-            if (target == null) return false;
-            
-            double distance = this.mob.distanceToSqr(target);
-            // Рывок, если цель на расстоянии от 4 до 10 блоков (от 16 до 100 квадратов)
-            if (distance < 16.0D || distance > 100.0D) return false;
-
-            // Проверяем, есть ли прямая видимость (чтобы не врезаться в стену)
-            return this.mob.getSensing().hasLineOfSight(target);
-        }
-
-        @Override
-        public void start() {
-            LivingEntity target = this.mob.getTarget();
-            if (target != null) {
-                // Запускаем анимацию рывка
-                this.mob.triggerAnim("Actions", "charge");
-                
-                // Вычисляем направление на цель
-                Vec3 direction = target.position().subtract(this.mob.position()).normalize();
-                // Придаем мобу импульс вперед
-                this.mob.setDeltaMovement(direction.x * speedModifier, this.mob.getDeltaMovement().y, direction.z * speedModifier);
-            }
-            this.cooldown = 100; // Кулдаун 5 секунд (100 тиков)
-        }
-
-        @Override
-        public boolean canContinueToUse() {
-            return false; // Рывок мгновенный (импульс), цель сразу завершается
-        }
-    }
-
+    // --- СТАЯ: Держаться на расстоянии 15 блоков ---
     public static class FollowGroupGoal extends Goal {
         private final NevegdaEntity mob;
         private final double speedModifier;
@@ -239,14 +185,20 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
         @Override
         public boolean canUse() {
             if (this.mob.getTarget() != null) return false;
+            
+            // Ищем союзников в радиусе 30 блоков (чтобы было кого искать)
             List<NevegdaEntity> allies = this.mob.level().getEntitiesOfClass(
                     NevegdaEntity.class,
-                    this.mob.getBoundingBox().inflate(10.0D),
+                    this.mob.getBoundingBox().inflate(30.0D),
                     (entity) -> entity != this.mob && entity.isAlive()
             );
             if (allies.isEmpty()) return false;
+            
+            // Ищем ближайшего (или первого) союзника
             this.leader = allies.get(0);
-            return this.mob.distanceToSqr(this.leader) > 9.0D;
+            
+            // Начинаем двигаться ТОЛЬКО если расстояние больше 15 блоков (225 квадратов)
+            return this.mob.distanceToSqr(this.leader) > 225.0D;
         }
 
         @Override
@@ -258,9 +210,10 @@ public class NevegdaEntity extends PathfinderMob implements GeoEntity {
 
         @Override
         public boolean canContinueToUse() {
+            // Продолжаем идти, пока не подойдем на 15 блоков (или цель не появится)
             return this.leader != null && this.leader.isAlive() 
                     && this.mob.getTarget() == null 
-                    && this.mob.distanceToSqr(this.leader) > 4.0D;
+                    && this.mob.distanceToSqr(this.leader) > 225.0D;
         }
 
         @Override
